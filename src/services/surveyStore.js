@@ -125,6 +125,45 @@ export function countSurveyQuestions(surveyJson) {
   return pageQuestions + visitElements(surveyJson.elements);
 }
 
+export function getSurveyFields(surveyJson) {
+  const fields = [];
+  const seen = new Set();
+
+  const labelFor = (element) => {
+    if (typeof element.title === "string" && element.title.trim()) {
+      return element.title.trim();
+    }
+
+    if (typeof element.name === "string" && element.name.trim()) {
+      return element.name.trim();
+    }
+
+    return "";
+  };
+
+  const visitElements = (elements = []) => {
+    elements.forEach((element) => {
+      if (element?.name && !seen.has(element.name)) {
+        seen.add(element.name);
+        fields.push({
+          name: element.name,
+          title: labelFor(element),
+          type: element.type || "question",
+        });
+      }
+
+      visitElements(element?.elements);
+      visitElements(element?.templateElements);
+      visitElements(element?.columns);
+    });
+  };
+
+  (surveyJson?.pages || []).forEach((page) => visitElements(page.elements));
+  visitElements(surveyJson?.elements);
+
+  return fields;
+}
+
 function normalizeLegacyForm(form) {
   const validation = validateSurveyJson(form.json || "{}");
   const surveyJson = validation.ok ? validation.surveyJson : {};
@@ -279,6 +318,13 @@ export function deleteResponse(responseId) {
   writeJson(
     RESPONSES_KEY,
     getResponses().filter((response) => response.id !== responseId),
+  );
+}
+
+export function deleteResponsesByForm(formId) {
+  writeJson(
+    RESPONSES_KEY,
+    getResponses().filter((response) => response.formId !== formId),
   );
 }
 

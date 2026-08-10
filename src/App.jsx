@@ -6,6 +6,7 @@ import TakeSurvey from "./pages/TakeSurvey";
 import NewSurvey from "./pages/NewSurvey";
 import Results from "./pages/Results";
 import PreviewSurvey from "./pages/PreviewSurvey";
+import FormOverview from "./pages/FormOverview";
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/admin/forms" element={<Dashboard />} />
         <Route path="/admin/forms/new" element={<NewSurvey />} />
         <Route path="/admin/forms/:id" element={<NewSurvey />} />
+        <Route path="/admin/forms/:id/overview" element={<FormOverview />} />
         <Route path="/admin/forms/:id/preview" element={<PreviewSurvey />} />
         <Route path="/admin/forms/:id/responses" element={<Results />} />
         <Route path="/f/:slug" element={<TakeSurvey />} />

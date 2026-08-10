@@ -253,6 +253,7 @@ function Dashboard() {
                     <td>
                       <div className="row-actions">
                         <Link to={`/admin/forms/${form.id}`}>Editar</Link>
+                        <Link to={`/admin/forms/${form.id}/overview`}>Resumen</Link>
                         <Link to={`/admin/forms/${form.id}/preview`}>Preview</Link>
                         <Link to={`/admin/forms/${form.id}/responses`}>
                           Respuestas

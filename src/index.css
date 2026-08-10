@@ -238,6 +238,16 @@ button.button {
   background: var(--surface-muted);
 }
 
+.button.danger {
+  color: #ffffff;
+  background: var(--danger);
+}
+
+.button.danger:hover {
+  color: #ffffff;
+  background: #8f1d14;
+}
+
 .link-button {
   border: 0;
   padding: 0;
@@ -257,7 +267,9 @@ button.button {
 .form-panel,
 .form-toolbar,
 .preview-banner,
-.survey-container {
+.survey-container,
+.detail-panel,
+.metric-card {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
@@ -306,6 +318,125 @@ button.button {
   color: var(--muted);
   background: #ffffff;
   font-size: 13px;
+  font-weight: 800;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.overview-grid.compact {
+  margin-bottom: 0;
+}
+
+.metric-card {
+  display: grid;
+  gap: 8px;
+  min-height: 92px;
+  padding: 16px;
+}
+
+.metric-card span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.metric-card strong {
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.metric-card .status {
+  font-size: 13px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(280px, 1.1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.detail-panel {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 20px;
+}
+
+.copy-field {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 10px;
+}
+
+.definition-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.definition-list div {
+  display: grid;
+  gap: 4px;
+}
+
+.definition-list dt {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.definition-list dd {
+  margin: 0;
+}
+
+.field-list,
+.recent-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.field-list li,
+.recent-list div {
+  display: grid;
+  gap: 3px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.field-list li:last-child,
+.recent-list div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.field-list span,
+.recent-list span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.search-field {
+  display: grid;
+  gap: 8px;
   font-weight: 800;
 }
 
@@ -502,6 +633,12 @@ summary {
   }
 
   .filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-grid,
+  .detail-grid,
+  .copy-field {
     grid-template-columns: 1fr;
   }
 
