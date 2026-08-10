@@ -1,12 +1,40 @@
 import { Link, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import AdminLayout from "../components/AdminLayout";
-import { getFormById } from "../services/surveyStore";
+import { getFormByIdFromDb } from "../services/surveyStore";
 
 function PreviewSurvey() {
   const { id } = useParams();
-  const form = getFormById(id);
+
+  const [form, setForm] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+    async function loadForm() {
+  const data = await getFormByIdFromDb(id);
+
+    if (data) {
+      setForm({
+        ...data,
+        surveyJson: data.survey_json,
+      });
+    }
+
+    setLoading(false);
+  }
+
+  loadForm();
+  }, [id]);
+
+  if (loading) {
+    return (
+    <AdminLayout title="Vista previa">
+      <p>Cargando formulario...</p>
+    </AdminLayout>
+  );
+}
 
   if (!form) {
     return (

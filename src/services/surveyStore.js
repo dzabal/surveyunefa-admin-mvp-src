@@ -1,3 +1,5 @@
+import { supabase } from "./supabase";
+
 const FORMS_KEY = "surveyunefa.forms";
 const RESPONSES_KEY = "surveyunefa.responses";
 const LEGACY_FORMS_KEY = "encuestas";
@@ -376,4 +378,96 @@ export function importLocalBackup(backup) {
     forms: backup.forms.length,
     responses: backup.responses.length,
   };
+}
+
+export async function getFormsFromDb() {
+  const { data, error } = await supabase
+    .from("forms")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    console.error("Error cargando formularios:", error);
+    return [];
+  }
+
+  return data;
+}
+
+export async function saveFormToDb(form) {
+
+  const formId = form.id || crypto.randomUUID();
+
+  console.log("FORMS TO SAVE:", form)
+  const { data, error } = await supabase
+    .from("forms")
+    .insert([
+      {
+        id: formId,
+        title: form.title,
+        slug: form.slug,
+        description: form.description,
+        status: form.status,
+        survey_json: form.surveyJson,
+      },
+    ])
+    .select();
+
+  console.log("DATA:",data);
+  console.log("ERROR:", error);
+
+  if (error) {
+    console.error("Error guardando formulario:", error);
+    return null;
+  }
+
+  return {
+    ...data[0],
+    id: formId,
+  };
+}
+
+export async function getFormByIdFromDb(id) {
+  const { data, error } = await supabase
+    .from("forms")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.error("Error obteniendo formulario:", error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function deleteFormFromDb(id) {
+  const { error } = await supabase
+    .from("forms")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error eliminando formulario:", error);
+    return false;
+  }
+
+  return true;
+}
+
+export async function updateFormInDb(id, updates) {
+  const { data, error } = await supabase
+    .from("forms")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error actualizando formulario:", error);
+    return null;
+  }
+
+  return data;
 }

@@ -10,6 +10,7 @@ import {
   getSurveyTitle,
   isSlugAvailable,
   saveForm,
+  saveFormToDb,
   slugify,
   validateSurveyJson,
 } from "../services/surveyStore";
@@ -129,7 +130,7 @@ function NewSurvey() {
     applyJsonDetails(validation.surveyJson);
   };
 
-  const handleSave = (nextStatus = status, redirectToPreview = false) => {
+  const handleSave = async (nextStatus = status, redirectToPreview = false) => {
     const result = validateAndBuildPayload(nextStatus);
 
     if (!result.ok) {
@@ -139,7 +140,7 @@ function NewSurvey() {
       return;
     }
 
-    const form = saveForm(result.payload);
+    const form = await saveFormToDb(result.payload);
     setMessage("Formulario guardado correctamente.");
     setMessageType("success");
 
