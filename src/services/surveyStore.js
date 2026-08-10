@@ -101,9 +101,29 @@ export function validateSurveyJson(rawJson) {
       message: `JSON valido. Detectamos ${questionCount} pregunta${questionCount === 1 ? "" : "s"}.`,
       questionCount,
     };
-  } catch {
-    return { ok: false, message: "El contenido no es un JSON valido." };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error?.message
+        ? `El contenido no es un JSON valido: ${error.message}.`
+        : "El contenido no es un JSON valido.",
+    };
   }
+}
+
+export function getSurveyTitle(surveyJson) {
+  if (typeof surveyJson?.title === "string" && surveyJson.title.trim()) {
+    return surveyJson.title.trim();
+  }
+
+  if (
+    typeof surveyJson?.pages?.[0]?.title === "string" &&
+    surveyJson.pages[0].title.trim()
+  ) {
+    return surveyJson.pages[0].title.trim();
+  }
+
+  return "";
 }
 
 export function countSurveyQuestions(surveyJson) {

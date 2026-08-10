@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useMemo, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
+import ConfirmDialog from "../components/ConfirmDialog";
 import {
   deleteResponse,
   deleteResponsesByForm,
@@ -63,6 +64,8 @@ function buildColumns(form, responses) {
 function Results() {
   const { id } = useParams();
   const [query, setQuery] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [pendingAction, setPendingAction] = useState(null);
   const form = getFormById(id);
   const responses = form ? getResponses(form.id) : [];
   const columns = form ? buildColumns(form, responses) : [];
@@ -82,7 +85,7 @@ function Results() {
         .toLowerCase()
         .includes(normalizedQuery),
     );
-  }, [query, responses]);
+  }, [query, responses, refreshKey]);
   const latestResponse = responses[0];
 
   const exportJson = () => {
@@ -115,21 +118,35 @@ function Results() {
   };
 
   const removeResponse = (responseId) => {
-    if (window.confirm("¿Eliminar esta respuesta local?")) {
-      deleteResponse(responseId);
-      window.location.reload();
-    }
+    setPendingAction({
+      type: "single",
+      responseId,
+      title: "Eliminar respuesta",
+      message: "Esta respuesta local se eliminara definitivamente.",
+      confirmLabel: "Eliminar",
+    });
   };
 
   const removeAllResponses = () => {
-    if (
-      window.confirm(
-        `¿Eliminar las ${responses.length} respuestas locales de "${form.title}"? Esta accion no se puede deshacer.`,
-      )
-    ) {
-      deleteResponsesByForm(form.id);
-      window.location.reload();
+    setPendingAction({
+      type: "all",
+      title: "Borrar respuestas",
+      message: `Se eliminaran las ${responses.length} respuestas locales de "${form.title}". Esta accion no se puede deshacer.`,
+      confirmLabel: "Borrar respuestas",
+    });
+  };
+
+  const confirmPendingAction = () => {
+    if (pendingAction?.type === "single") {
+      deleteResponse(pendingAction.responseId);
     }
+
+    if (pendingAction?.type === "all") {
+      deleteResponsesByForm(form.id);
+    }
+
+    setPendingAction(null);
+    setRefreshKey((current) => current + 1);
   };
 
   if (!form) {
@@ -276,6 +293,16 @@ function Results() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingAction)}
+        title={pendingAction?.title}
+        message={pendingAction?.message}
+        confirmLabel={pendingAction?.confirmLabel}
+        danger
+        onConfirm={confirmPendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </AdminLayout>
   );
 }

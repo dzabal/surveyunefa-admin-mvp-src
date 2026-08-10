@@ -3,8 +3,11 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import AdminLayout from "../components/AdminLayout";
 import {
   FORM_STATUS,
+  countSurveyQuestions,
   getFormById,
   getResponses,
+  getSurveyFields,
+  getSurveyTitle,
   isSlugAvailable,
   saveForm,
   slugify,
@@ -26,6 +29,7 @@ function NewSurvey() {
   );
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("neutral");
+  const [jsonInfo, setJsonInfo] = useState(null);
 
   const isEditing = Boolean(existingForm);
 
@@ -34,6 +38,29 @@ function NewSurvey() {
     if (!isEditing || !slug) {
       setSlug(slugify(value));
     }
+  };
+
+  const handleJsonChange = (value) => {
+    setRawJson(value);
+    setMessage("");
+    setJsonInfo(null);
+  };
+
+  const applyJsonDetails = (surveyJson) => {
+    const detectedTitle = getSurveyTitle(surveyJson);
+    const fields = getSurveyFields(surveyJson);
+    const questionCount = countSurveyQuestions(surveyJson);
+
+    if (!title.trim() && detectedTitle) {
+      setTitle(detectedTitle);
+      setSlug(slugify(detectedTitle));
+    }
+
+    setJsonInfo({
+      title: detectedTitle,
+      questions: questionCount,
+      fields: fields.length,
+    });
   };
 
   const validateAndBuildPayload = (nextStatus = status) => {
@@ -77,6 +104,29 @@ function NewSurvey() {
     const validation = validateSurveyJson(rawJson);
     setMessage(validation.message);
     setMessageType(validation.ok ? "success" : "error");
+
+    if (validation.ok) {
+      applyJsonDetails(validation.surveyJson);
+      return;
+    }
+
+    setJsonInfo(null);
+  };
+
+  const handleFormatJson = () => {
+    const validation = validateSurveyJson(rawJson);
+
+    if (!validation.ok) {
+      setMessage(validation.message);
+      setMessageType("error");
+      setJsonInfo(null);
+      return;
+    }
+
+    setRawJson(JSON.stringify(validation.surveyJson, null, 2));
+    setMessage("JSON formateado correctamente.");
+    setMessageType("success");
+    applyJsonDetails(validation.surveyJson);
   };
 
   const handleSave = (nextStatus = status, redirectToPreview = false) => {
@@ -85,6 +135,7 @@ function NewSurvey() {
     if (!result.ok) {
       setMessage(result.message);
       setMessageType("error");
+      setJsonInfo(null);
       return;
     }
 
@@ -163,21 +214,49 @@ function NewSurvey() {
                 <option value="archived">Archivado</option>
               </select>
             </label>
+
+            {status === FORM_STATUS.published ? (
+              <div className="publish-note">
+                Al guardar, el formulario quedara disponible en /f/
+                {slug || "slug-publico"}.
+              </div>
+            ) : null}
           </section>
 
           <section className="form-panel json-panel">
-            <label>
-              JSON de SurveyJS
-              <textarea
-                value={rawJson}
-                onChange={(event) => {
-                  setRawJson(event.target.value);
-                  setMessage("");
-                }}
-                placeholder='{"title":"Mi encuesta","pages":[...]}'
-                spellCheck="false"
-              />
-            </label>
+            <div className="section-heading">
+              <label htmlFor="survey-json">JSON de SurveyJS</label>
+              <div className="actions-row">
+                <button
+                  className="button secondary compact"
+                  type="button"
+                  onClick={handleValidate}
+                >
+                  Validar
+                </button>
+                <button
+                  className="button secondary compact"
+                  type="button"
+                  onClick={handleFormatJson}
+                >
+                  Formatear
+                </button>
+              </div>
+            </div>
+            <textarea
+              id="survey-json"
+              value={rawJson}
+              onChange={(event) => handleJsonChange(event.target.value)}
+              placeholder='{"title":"Mi encuesta","pages":[...]}'
+              spellCheck="false"
+            />
+            {jsonInfo ? (
+              <div className="json-stats">
+                <span>Preguntas: {jsonInfo.questions}</span>
+                <span>Campos: {jsonInfo.fields}</span>
+                {jsonInfo.title ? <span>Titulo: {jsonInfo.title}</span> : null}
+              </div>
+            ) : null}
           </section>
 
           <section className="form-toolbar">
@@ -187,9 +266,6 @@ function NewSurvey() {
               ) : null}
             </div>
             <div className="actions-row">
-              <button className="button secondary" type="button" onClick={handleValidate}>
-                Validar JSON
-              </button>
               <button className="button secondary" type="button" onClick={() => handleSave(FORM_STATUS.draft)}>
                 Guardar borrador
               </button>

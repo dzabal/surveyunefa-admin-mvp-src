@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router-dom";
+import { useState } from "react";
 import AdminLayout from "../components/AdminLayout";
 import {
   FORM_STATUS,
@@ -16,6 +17,8 @@ function formatDate(value) {
 
 function FormOverview() {
   const { id } = useParams();
+  const [, setRefreshKey] = useState(0);
+  const [notice, setNotice] = useState("");
   const form = getFormById(id);
 
   if (!form) {
@@ -40,18 +43,23 @@ function FormOverview() {
   const copyPublicLink = async () => {
     try {
       await navigator.clipboard.writeText(publicUrl);
-      window.alert("Link publico copiado.");
+      setNotice("Link publico copiado.");
     } catch {
-      window.prompt("Copia el link publico:", publicUrl);
+      setNotice(`No se pudo copiar automaticamente. Link: ${publicUrl}`);
     }
   };
 
   const togglePublished = () => {
-    updateFormStatus(
+    const updated = updateFormStatus(
       form.id,
       form.status === FORM_STATUS.published ? FORM_STATUS.draft : FORM_STATUS.published,
     );
-    window.location.reload();
+    setNotice(
+      updated?.status === FORM_STATUS.published
+        ? "Formulario publicado."
+        : "Formulario despublicado.",
+    );
+    setRefreshKey((current) => current + 1);
   };
 
   return (
@@ -102,6 +110,8 @@ function FormOverview() {
               : "Este formulario no esta disponible publicamente."}
           </p>
         </div>
+
+        {notice ? <p className="form-message success">{notice}</p> : null}
 
         <div className="copy-field">
           <input readOnly value={publicUrl} />

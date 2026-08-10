@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { useMemo, useRef, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
+import ConfirmDialog from "../components/ConfirmDialog";
+import FormActions from "../components/FormActions";
 import {
   deleteForm,
   duplicateForm,
@@ -29,6 +31,7 @@ function Dashboard() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [notice, setNotice] = useState("");
+  const [pendingAction, setPendingAction] = useState(null);
   const backupInputRef = useRef(null);
   const forms = getForms();
   const visibleForms = useMemo(() => {
@@ -57,18 +60,6 @@ function Dashboard() {
 
   const refresh = () => setRefreshKey((current) => current + 1);
 
-  const removeForm = (form) => {
-    const confirmed = window.confirm(
-      `Eliminar "${form.title}" tambien borrara sus respuestas locales. ¿Continuar?`,
-    );
-
-    if (confirmed) {
-      deleteForm(form.id);
-      setNotice(`Formulario "${form.title}" eliminado.`);
-      refresh();
-    }
-  };
-
   const changeStatus = (form, status) => {
     const nextForm = updateFormStatus(form.id, status);
     if (nextForm) {
@@ -84,6 +75,48 @@ function Dashboard() {
       setNotice(`Se creo una copia en borrador: "${duplicated.title}".`);
       refresh();
     }
+  };
+
+  const requestArchive = (form) => {
+    setPendingAction({
+      type: "archive",
+      form,
+      title: "Archivar formulario",
+      message: `"${form.title}" dejara de estar disponible publicamente, pero se conservara con sus respuestas.`,
+      confirmLabel: "Archivar",
+      danger: true,
+    });
+  };
+
+  const requestDelete = (form) => {
+    setPendingAction({
+      type: "delete",
+      form,
+      title: "Eliminar formulario",
+      message: `"${form.title}" y sus respuestas locales se eliminaran definitivamente. Esta accion no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+      danger: true,
+    });
+  };
+
+  const confirmPendingAction = () => {
+    if (!pendingAction) {
+      return;
+    }
+
+    const { type, form } = pendingAction;
+
+    if (type === "archive") {
+      changeStatus(form, FORM_STATUS.archived);
+    }
+
+    if (type === "delete") {
+      deleteForm(form.id);
+      setNotice(`Formulario "${form.title}" eliminado.`);
+      refresh();
+    }
+
+    setPendingAction(null);
   };
 
   const copyPublicLink = async (form) => {
@@ -117,14 +150,18 @@ function Dashboard() {
       return;
     }
 
-    const confirmed = window.confirm(
-      "Importar este respaldo reemplazara los formularios y respuestas locales actuales. ¿Continuar?",
-    );
+    setPendingAction({
+      type: "import",
+      file,
+      title: "Importar respaldo",
+      message:
+        "Este respaldo reemplazara los formularios y respuestas locales actuales.",
+      confirmLabel: "Importar",
+      danger: true,
+    });
+  };
 
-    if (!confirmed) {
-      return;
-    }
-
+  const confirmImportBackup = async (file) => {
     try {
       const content = await file.text();
       const result = importLocalBackup(JSON.parse(content));
@@ -134,7 +171,18 @@ function Dashboard() {
       refresh();
     } catch (error) {
       setNotice(error.message || "No se pudo importar el respaldo.");
+    } finally {
+      setPendingAction(null);
     }
+  };
+
+  const confirmDialogAction = () => {
+    if (pendingAction?.type === "import") {
+      confirmImportBackup(pendingAction.file);
+      return;
+    }
+
+    confirmPendingAction();
   };
 
   return (
@@ -242,6 +290,9 @@ function Dashboard() {
                     <td>
                       <strong>{form.title}</strong>
                       <span className="muted">/f/{form.slug}</span>
+                      {form.description ? (
+                        <span className="table-description">{form.description}</span>
+                      ) : null}
                     </td>
                     <td>
                       <span className={`status ${form.status}`}>
@@ -251,57 +302,19 @@ function Dashboard() {
                     <td>{responses.length}</td>
                     <td>{new Date(form.updatedAt).toLocaleString()}</td>
                     <td>
-                      <div className="row-actions">
-                        <Link to={`/admin/forms/${form.id}`}>Editar</Link>
-                        <Link to={`/admin/forms/${form.id}/overview`}>Resumen</Link>
-                        <Link to={`/admin/forms/${form.id}/preview`}>Preview</Link>
-                        <Link to={`/admin/forms/${form.id}/responses`}>
-                          Respuestas
-                        </Link>
-                        <button
-                          className="link-button"
-                          type="button"
-                          onClick={() => cloneForm(form)}
-                        >
-                          Duplicar
-                        </button>
-                        {form.status === FORM_STATUS.published ? (
-                          <button
-                            className="link-button"
-                            type="button"
-                            onClick={() => changeStatus(form, FORM_STATUS.draft)}
-                          >
-                            Despublicar
-                          </button>
-                        ) : (
-                          <button
-                            className="link-button"
-                            type="button"
-                            onClick={() => changeStatus(form, FORM_STATUS.published)}
-                          >
-                            Publicar
-                          </button>
-                        )}
-                        <button
-                          className="link-button"
-                          type="button"
-                          onClick={() => copyPublicLink(form)}
-                          disabled={form.status !== "published"}
-                        >
-                          Copiar link
-                        </button>
-                        <button
-                          className="link-button danger"
-                          type="button"
-                          onClick={() =>
-                            form.status === FORM_STATUS.archived
-                              ? removeForm(form)
-                              : changeStatus(form, FORM_STATUS.archived)
-                          }
-                        >
-                          {form.status === FORM_STATUS.archived ? "Eliminar" : "Archivar"}
-                        </button>
-                      </div>
+                      <FormActions
+                        form={form}
+                        onArchive={requestArchive}
+                        onCopyLink={copyPublicLink}
+                        onDelete={requestDelete}
+                        onDuplicate={cloneForm}
+                        onPublish={(targetForm) =>
+                          changeStatus(targetForm, FORM_STATUS.published)
+                        }
+                        onUnpublish={(targetForm) =>
+                          changeStatus(targetForm, FORM_STATUS.draft)
+                        }
+                      />
                     </td>
                   </tr>
                 );
@@ -310,6 +323,16 @@ function Dashboard() {
           </table>
         </section>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingAction)}
+        title={pendingAction?.title}
+        message={pendingAction?.message}
+        confirmLabel={pendingAction?.confirmLabel}
+        danger={pendingAction?.danger}
+        onConfirm={confirmDialogAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </AdminLayout>
   );
 }
