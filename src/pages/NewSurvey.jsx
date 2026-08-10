@@ -25,6 +25,7 @@ function NewSurvey() {
     existingForm ? JSON.stringify(existingForm.surveyJson, null, 2) : "",
   );
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("neutral");
 
   const isEditing = Boolean(existingForm);
 
@@ -74,7 +75,8 @@ function NewSurvey() {
 
   const handleValidate = () => {
     const validation = validateSurveyJson(rawJson);
-    setMessage(validation.ok ? "JSON valido para SurveyJS." : validation.message);
+    setMessage(validation.message);
+    setMessageType(validation.ok ? "success" : "error");
   };
 
   const handleSave = (nextStatus = status, redirectToPreview = false) => {
@@ -82,11 +84,13 @@ function NewSurvey() {
 
     if (!result.ok) {
       setMessage(result.message);
+      setMessageType("error");
       return;
     }
 
     const form = saveForm(result.payload);
     setMessage("Formulario guardado correctamente.");
+    setMessageType("success");
 
     if (redirectToPreview) {
       navigate(`/admin/forms/${form.id}/preview`);
@@ -166,7 +170,10 @@ function NewSurvey() {
               JSON de SurveyJS
               <textarea
                 value={rawJson}
-                onChange={(event) => setRawJson(event.target.value)}
+                onChange={(event) => {
+                  setRawJson(event.target.value);
+                  setMessage("");
+                }}
                 placeholder='{"title":"Mi encuesta","pages":[...]}'
                 spellCheck="false"
               />
@@ -174,13 +181,20 @@ function NewSurvey() {
           </section>
 
           <section className="form-toolbar">
-            <div>{message ? <p className="form-message">{message}</p> : null}</div>
+            <div>
+              {message ? (
+                <p className={`form-message ${messageType}`}>{message}</p>
+              ) : null}
+            </div>
             <div className="actions-row">
               <button className="button secondary" type="button" onClick={handleValidate}>
                 Validar JSON
               </button>
               <button className="button secondary" type="button" onClick={() => handleSave(FORM_STATUS.draft)}>
                 Guardar borrador
+              </button>
+              <button className="button secondary" type="button" onClick={() => handleSave(FORM_STATUS.published)}>
+                Guardar y publicar
               </button>
               <button className="button primary" type="button" onClick={() => handleSave(status, true)}>
                 Guardar y previsualizar

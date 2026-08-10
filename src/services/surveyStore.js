@@ -15,6 +15,13 @@ export const STATUS_LABELS = {
   archived: "Archivado",
 };
 
+export const STATUS_OPTIONS = [
+  { value: "all", label: "Todos" },
+  { value: FORM_STATUS.draft, label: STATUS_LABELS.draft },
+  { value: FORM_STATUS.published, label: STATUS_LABELS.published },
+  { value: FORM_STATUS.archived, label: STATUS_LABELS.archived },
+];
+
 function readJson(key, fallback) {
   try {
     const value = localStorage.getItem(key);
@@ -54,8 +61,16 @@ export function validateSurveyJson(rawJson) {
 
   try {
     const parsed = JSON.parse(rawJson);
+    const isObject = parsed && typeof parsed === "object" && !Array.isArray(parsed);
     const hasPages = Array.isArray(parsed.pages) && parsed.pages.length > 0;
     const hasElements = Array.isArray(parsed.elements) && parsed.elements.length > 0;
+
+    if (!isObject) {
+      return {
+        ok: false,
+        message: "El JSON debe ser un objeto de SurveyJS, no una lista ni texto suelto.",
+      };
+    }
 
     if (!hasPages && !hasElements) {
       return {
@@ -64,10 +79,36 @@ export function validateSurveyJson(rawJson) {
       };
     }
 
-    return { ok: true, surveyJson: parsed };
+    const questionCount = countSurveyQuestions(parsed);
+
+    return {
+      ok: true,
+      surveyJson: parsed,
+      message: `JSON valido. Detectamos ${questionCount} pregunta${questionCount === 1 ? "" : "s"}.`,
+      questionCount,
+    };
   } catch {
     return { ok: false, message: "El contenido no es un JSON valido." };
   }
+}
+
+export function countSurveyQuestions(surveyJson) {
+  const visitElements = (elements = []) =>
+    elements.reduce((count, element) => {
+      const nestedCount =
+        visitElements(element.elements) +
+        visitElements(element.templateElements) +
+        visitElements(element.columns);
+
+      return count + (element.name ? 1 : 0) + nestedCount;
+    }, 0);
+
+  const pageQuestions = (surveyJson.pages || []).reduce(
+    (count, page) => count + visitElements(page.elements),
+    0,
+  );
+
+  return pageQuestions + visitElements(surveyJson.elements);
 }
 
 function normalizeLegacyForm(form) {
@@ -154,6 +195,16 @@ export function saveForm(payload) {
 
   writeJson(FORMS_KEY, nextForms);
   return form;
+}
+
+export function updateFormStatus(id, status) {
+  const form = getFormById(id);
+
+  if (!form) {
+    return null;
+  }
+
+  return saveForm({ ...form, status });
 }
 
 export function deleteForm(id) {

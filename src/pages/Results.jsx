@@ -17,6 +17,22 @@ function escapeCsv(value) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
+function formatValue(value) {
+  if (value == null || value === "") {
+    return "";
+  }
+
+  if (Array.isArray(value)) {
+    return value.join(", ");
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
 function Results() {
   const { id } = useParams();
   const form = getFormById(id);
@@ -128,17 +144,25 @@ function Results() {
                   <td>{new Date(response.submittedAt).toLocaleString()}</td>
                   {columns.map((column) => (
                     <td key={column}>
-                      {JSON.stringify(response.data?.[column] ?? "")}
+                      {formatValue(response.data?.[column])}
                     </td>
                   ))}
                   <td>
-                    <button
-                      className="link-button danger"
-                      type="button"
-                      onClick={() => removeResponse(response.id)}
-                    >
-                      Eliminar
-                    </button>
+                    <div className="row-actions">
+                      <details>
+                        <summary>Ver JSON</summary>
+                        <pre className="response-json">
+                          {JSON.stringify(response.data, null, 2)}
+                        </pre>
+                      </details>
+                      <button
+                        className="link-button danger"
+                        type="button"
+                        onClick={() => removeResponse(response.id)}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
