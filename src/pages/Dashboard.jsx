@@ -1,21 +1,35 @@
 import { Link } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
 import {
   deleteForm,
+  duplicateForm,
+  exportLocalBackup,
   FORM_STATUS,
   getForms,
   getResponses,
+  importLocalBackup,
   STATUS_OPTIONS,
   STATUS_LABELS,
   updateFormStatus,
 } from "../services/surveyStore";
+
+function downloadFile(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 function Dashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [notice, setNotice] = useState("");
+  const backupInputRef = useRef(null);
   const forms = getForms();
   const visibleForms = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -63,6 +77,15 @@ function Dashboard() {
     }
   };
 
+  const cloneForm = (form) => {
+    const duplicated = duplicateForm(form.id);
+
+    if (duplicated) {
+      setNotice(`Se creo una copia en borrador: "${duplicated.title}".`);
+      refresh();
+    }
+  };
+
   const copyPublicLink = async (form) => {
     const publicUrl = `${window.location.origin}/f/${form.slug}`;
 
@@ -74,14 +97,73 @@ function Dashboard() {
     }
   };
 
+  const exportBackup = () => {
+    const backup = exportLocalBackup();
+    const date = new Date().toISOString().slice(0, 10);
+
+    downloadFile(
+      `surveyunefa-respaldo-${date}.json`,
+      JSON.stringify(backup, null, 2),
+      "application/json",
+    );
+    setNotice("Respaldo local exportado.");
+  };
+
+  const importBackup = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Importar este respaldo reemplazara los formularios y respuestas locales actuales. ¿Continuar?",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const content = await file.text();
+      const result = importLocalBackup(JSON.parse(content));
+      setNotice(
+        `Respaldo importado: ${result.forms} formulario${result.forms === 1 ? "" : "s"} y ${result.responses} respuesta${result.responses === 1 ? "" : "s"}.`,
+      );
+      refresh();
+    } catch (error) {
+      setNotice(error.message || "No se pudo importar el respaldo.");
+    }
+  };
+
   return (
     <AdminLayout
       title="Formularios"
       eyebrow={`${forms.length} formulario${forms.length === 1 ? "" : "s"}`}
       actions={
-        <Link className="button primary" to="/admin/forms/new">
-          Nuevo formulario
-        </Link>
+        <div className="actions-row">
+          <button className="button secondary" type="button" onClick={exportBackup}>
+            Exportar respaldo
+          </button>
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() => backupInputRef.current?.click()}
+          >
+            Importar respaldo
+          </button>
+          <input
+            ref={backupInputRef}
+            className="sr-only"
+            type="file"
+            accept="application/json"
+            onChange={importBackup}
+          />
+          <Link className="button primary" to="/admin/forms/new">
+            Nuevo formulario
+          </Link>
+        </div>
       }
     >
       {forms.length > 0 ? (
@@ -175,6 +257,13 @@ function Dashboard() {
                         <Link to={`/admin/forms/${form.id}/responses`}>
                           Respuestas
                         </Link>
+                        <button
+                          className="link-button"
+                          type="button"
+                          onClick={() => cloneForm(form)}
+                        >
+                          Duplicar
+                        </button>
                         {form.status === FORM_STATUS.published ? (
                           <button
                             className="link-button"
@@ -203,9 +292,13 @@ function Dashboard() {
                         <button
                           className="link-button danger"
                           type="button"
-                          onClick={() => removeForm(form)}
+                          onClick={() =>
+                            form.status === FORM_STATUS.archived
+                              ? removeForm(form)
+                              : changeStatus(form, FORM_STATUS.archived)
+                          }
                         >
-                          Eliminar
+                          {form.status === FORM_STATUS.archived ? "Eliminar" : "Archivar"}
                         </button>
                       </div>
                     </td>

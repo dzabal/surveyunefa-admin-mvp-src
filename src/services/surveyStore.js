@@ -2,6 +2,7 @@ const FORMS_KEY = "surveyunefa.forms";
 const RESPONSES_KEY = "surveyunefa.responses";
 const LEGACY_FORMS_KEY = "encuestas";
 const LEGACY_RESPONSES_KEY = "respuestas";
+const BACKUP_VERSION = 1;
 
 export const FORM_STATUS = {
   draft: "draft",
@@ -41,6 +42,19 @@ function createId() {
   }
 
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createUniqueSlug(baseSlug, currentId) {
+  const cleanBase = slugify(baseSlug) || "formulario";
+  let candidate = cleanBase;
+  let suffix = 2;
+
+  while (!isSlugAvailable(candidate, currentId)) {
+    candidate = `${cleanBase}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
 }
 
 export function slugify(value) {
@@ -197,6 +211,30 @@ export function saveForm(payload) {
   return form;
 }
 
+export function duplicateForm(id) {
+  const form = getFormById(id);
+
+  if (!form) {
+    return null;
+  }
+
+  const copyTitle = `${form.title} copia`;
+  const now = new Date().toISOString();
+  const duplicated = {
+    ...form,
+    id: createId(),
+    title: copyTitle,
+    slug: createUniqueSlug(`${form.slug}-copia`),
+    status: FORM_STATUS.draft,
+    surveyJson: JSON.parse(JSON.stringify(form.surveyJson)),
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  writeJson(FORMS_KEY, [duplicated, ...getForms()]);
+  return duplicated;
+}
+
 export function updateFormStatus(id, status) {
   const form = getFormById(id);
 
@@ -242,4 +280,34 @@ export function deleteResponse(responseId) {
     RESPONSES_KEY,
     getResponses().filter((response) => response.id !== responseId),
   );
+}
+
+export function exportLocalBackup() {
+  return {
+    app: "surveyunefa",
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    forms: getForms(),
+    responses: getResponses(),
+  };
+}
+
+export function importLocalBackup(backup) {
+  const isValidBackup =
+    backup &&
+    backup.app === "surveyunefa" &&
+    Array.isArray(backup.forms) &&
+    Array.isArray(backup.responses);
+
+  if (!isValidBackup) {
+    throw new Error("El archivo no parece ser un respaldo valido de SurveyUNEFA.");
+  }
+
+  writeJson(FORMS_KEY, backup.forms);
+  writeJson(RESPONSES_KEY, backup.responses);
+
+  return {
+    forms: backup.forms.length,
+    responses: backup.responses.length,
+  };
 }
