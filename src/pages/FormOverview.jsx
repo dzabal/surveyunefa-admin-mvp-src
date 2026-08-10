@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
 import {
   FORM_STATUS,
@@ -17,30 +17,34 @@ function formatDate(value) {
 
 function FormOverview() {
   const { id } = useParams();
-  const [, setRefreshKey] = useState(0);
+  const [form, setForm] = useState(null);
+  const [responses, setResponses] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
-  const form = getFormById(id);
+  const [error, setError] = useState("");
 
-  if (!form) {
-    return (
-      <AdminLayout title="Resumen" eyebrow="Formulario no encontrado">
-        <section className="empty-state">
-          <h2>No encontramos ese formulario</h2>
-          <Link className="button primary" to="/admin/forms">
-            Volver al dashboard
-          </Link>
-        </section>
-      </AdminLayout>
-    );
-  }
+  const loadOverview = async () => {
+    setLoading(true);
+    setError("");
 
-  const responses = getResponses(form.id);
-  const fields = getSurveyFields(form.surveyJson);
-  const questionCount = countSurveyQuestions(form.surveyJson);
-  const publicUrl = `${window.location.origin}/f/${form.slug}`;
-  const latestResponse = responses[0];
+    try {
+      const loadedForm = await getFormById(id);
+      setForm(loadedForm);
+      setResponses(loadedForm ? await getResponses(loadedForm.id) : []);
+    } catch (loadError) {
+      setError(loadError.message || "No se pudo cargar el resumen.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOverview();
+  }, [id]);
 
   const copyPublicLink = async () => {
+    const publicUrl = `${window.location.origin}/f/${form.slug}`;
+
     try {
       await navigator.clipboard.writeText(publicUrl);
       setNotice("Link publico copiado.");
@@ -49,18 +53,53 @@ function FormOverview() {
     }
   };
 
-  const togglePublished = () => {
-    const updated = updateFormStatus(
-      form.id,
-      form.status === FORM_STATUS.published ? FORM_STATUS.draft : FORM_STATUS.published,
-    );
-    setNotice(
-      updated?.status === FORM_STATUS.published
-        ? "Formulario publicado."
-        : "Formulario despublicado.",
-    );
-    setRefreshKey((current) => current + 1);
+  const togglePublished = async () => {
+    try {
+      const updated = await updateFormStatus(
+        form.id,
+        form.status === FORM_STATUS.published ? FORM_STATUS.draft : FORM_STATUS.published,
+      );
+
+      setForm(updated);
+      setNotice(
+        updated.status === FORM_STATUS.published
+          ? "Formulario publicado."
+          : "Formulario despublicado.",
+      );
+    } catch (statusError) {
+      setError(statusError.message || "No se pudo cambiar la publicacion.");
+    }
   };
+
+  if (loading) {
+    return (
+      <AdminLayout title="Resumen" eyebrow="Cargando formulario">
+        <section className="empty-state">
+          <h2>Cargando resumen</h2>
+          <p>Consultando Supabase.</p>
+        </section>
+      </AdminLayout>
+    );
+  }
+
+  if (!form) {
+    return (
+      <AdminLayout title="Resumen" eyebrow="Formulario no encontrado">
+        <section className="empty-state">
+          <h2>No encontramos ese formulario</h2>
+          {error ? <p className="form-message error">{error}</p> : null}
+          <Link className="button primary" to="/admin/forms">
+            Volver al dashboard
+          </Link>
+        </section>
+      </AdminLayout>
+    );
+  }
+
+  const fields = getSurveyFields(form.surveyJson);
+  const questionCount = countSurveyQuestions(form.surveyJson);
+  const publicUrl = `${window.location.origin}/f/${form.slug}`;
+  const latestResponse = responses[0];
 
   return (
     <AdminLayout
@@ -80,6 +119,8 @@ function FormOverview() {
         </div>
       }
     >
+      {error ? <p className="form-message error">{error}</p> : null}
+
       <section className="overview-grid">
         <article className="metric-card">
           <span>Estado</span>
@@ -173,7 +214,7 @@ function FormOverview() {
         <div className="section-heading">
           <div>
             <h2>Respuestas recientes</h2>
-            <p className="muted">Ultimos envios recibidos en este navegador.</p>
+            <p className="muted">Ultimos envios recibidos en Supabase.</p>
           </div>
           <Link className="button secondary" to={`/admin/forms/${form.id}/responses`}>
             Ver respuestas

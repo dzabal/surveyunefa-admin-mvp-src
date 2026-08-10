@@ -1,46 +1,63 @@
 import { Link, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import AdminLayout from "../components/AdminLayout";
-import { getFormByIdFromDb } from "../services/surveyStore";
+import { FORM_STATUS, getFormById } from "../services/surveyStore";
 
 function PreviewSurvey() {
   const { id } = useParams();
-
   const [form, setForm] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-    useEffect(() => {
+  useEffect(() => {
     async function loadForm() {
-  const data = await getFormByIdFromDb(id);
+      setLoading(true);
+      setError("");
 
-    if (data) {
-      setForm({
-        ...data,
-        surveyJson: data.survey_json,
-      });
+      try {
+        setForm(await getFormById(id));
+      } catch (loadError) {
+        setError(loadError.message || "No se pudo cargar el formulario.");
+      } finally {
+        setLoading(false);
+      }
     }
 
-    setLoading(false);
-  }
-
-  loadForm();
+    loadForm();
   }, [id]);
+
+  const survey = useMemo(() => {
+    if (!form) {
+      return null;
+    }
+
+    const model = new Model(form.surveyJson);
+    model.onComplete.add((sender) => {
+      sender.clear(false, true);
+    });
+
+    return model;
+  }, [form]);
 
   if (loading) {
     return (
-    <AdminLayout title="Vista previa">
-      <p>Cargando formulario...</p>
-    </AdminLayout>
-  );
-}
+      <AdminLayout title="Vista previa">
+        <section className="empty-state">
+          <h2>Cargando formulario</h2>
+          <p>Consultando Supabase.</p>
+        </section>
+      </AdminLayout>
+    );
+  }
 
   if (!form) {
     return (
       <AdminLayout title="Vista previa" eyebrow="Formulario no encontrado">
         <section className="empty-state">
           <h2>No encontramos ese formulario</h2>
+          {error ? <p className="form-message error">{error}</p> : null}
           <Link className="button primary" to="/admin/forms">
             Volver al dashboard
           </Link>
@@ -48,11 +65,6 @@ function PreviewSurvey() {
       </AdminLayout>
     );
   }
-
-  const survey = new Model(form.surveyJson);
-  survey.onComplete.add((sender) => {
-    sender.clear(false, true);
-  });
 
   return (
     <AdminLayout
@@ -63,7 +75,7 @@ function PreviewSurvey() {
           <Link className="button secondary" to={`/admin/forms/${form.id}`}>
             Editar
           </Link>
-          {form.status === "published" ? (
+          {form.status === FORM_STATUS.published ? (
             <Link className="button primary" to={`/f/${form.slug}`} target="_blank">
               Abrir publico
             </Link>

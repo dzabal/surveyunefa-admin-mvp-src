@@ -1,3 +1,10 @@
 node_modules/
 dist/
 .env
+src/pages/TestDelete.jsx
+src/pages/TestFormById.jsx
+src/pages/TestInsert.jsx
+src/pages/TestSupabase.jsx
+src/pages/TestUpdate.jsx
+src/App_1.jsx
+src/components/SurveyCreator.jsx

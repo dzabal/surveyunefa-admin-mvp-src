@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import AdminLayout from "../components/AdminLayout";
 import {
@@ -10,7 +10,6 @@ import {
   getSurveyTitle,
   isSlugAvailable,
   saveForm,
-  saveFormToDb,
   slugify,
   validateSurveyJson,
 } from "../services/surveyStore";
@@ -18,21 +17,64 @@ import {
 function NewSurvey() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const existingForm = useMemo(() => (id ? getFormById(id) : null), [id]);
-  const responses = existingForm ? getResponses(existingForm.id) : [];
+  const [existingForm, setExistingForm] = useState(null);
+  const [responsesCount, setResponsesCount] = useState(0);
+  const [loading, setLoading] = useState(Boolean(id));
+  const [notFound, setNotFound] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [title, setTitle] = useState(existingForm?.title || "");
-  const [slug, setSlug] = useState(existingForm?.slug || "");
-  const [description, setDescription] = useState(existingForm?.description || "");
-  const [status, setStatus] = useState(existingForm?.status || FORM_STATUS.draft);
-  const [rawJson, setRawJson] = useState(
-    existingForm ? JSON.stringify(existingForm.surveyJson, null, 2) : "",
-  );
+  const [title, setTitle] = useState("");
+  const [slug, setSlug] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState(FORM_STATUS.draft);
+  const [rawJson, setRawJson] = useState("");
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("neutral");
   const [jsonInfo, setJsonInfo] = useState(null);
 
   const isEditing = Boolean(existingForm);
+
+  useEffect(() => {
+    async function loadExistingForm() {
+      if (!id) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setNotFound(false);
+
+      try {
+        const form = await getFormById(id);
+
+        if (!form) {
+          setNotFound(true);
+          return;
+        }
+
+        const responses = await getResponses(form.id);
+        setExistingForm(form);
+        setResponsesCount(responses.length);
+        setTitle(form.title);
+        setSlug(form.slug);
+        setDescription(form.description);
+        setStatus(form.status);
+        setRawJson(JSON.stringify(form.surveyJson, null, 2));
+        setJsonInfo({
+          title: getSurveyTitle(form.surveyJson),
+          questions: countSurveyQuestions(form.surveyJson),
+          fields: getSurveyFields(form.surveyJson).length,
+        });
+      } catch (error) {
+        setMessage(error.message || "No se pudo cargar el formulario.");
+        setMessageType("error");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadExistingForm();
+  }, [id]);
 
   const handleTitleChange = (value) => {
     setTitle(value);
@@ -64,7 +106,7 @@ function NewSurvey() {
     });
   };
 
-  const validateAndBuildPayload = (nextStatus = status) => {
+  const validateAndBuildPayload = async (nextStatus = status) => {
     const validation = validateSurveyJson(rawJson);
 
     if (!title.trim()) {
@@ -80,8 +122,9 @@ function NewSurvey() {
     }
 
     const normalizedSlug = slugify(slug || title);
+    const available = await isSlugAvailable(normalizedSlug, existingForm?.id);
 
-    if (!isSlugAvailable(normalizedSlug, existingForm?.id)) {
+    if (!available) {
       return {
         ok: false,
         message: "Ya existe otro formulario con ese slug publico.",
@@ -131,25 +174,34 @@ function NewSurvey() {
   };
 
   const handleSave = async (nextStatus = status, redirectToPreview = false) => {
-    const result = validateAndBuildPayload(nextStatus);
+    setSaving(true);
+    const result = await validateAndBuildPayload(nextStatus);
 
     if (!result.ok) {
       setMessage(result.message);
       setMessageType("error");
       setJsonInfo(null);
+      setSaving(false);
       return;
     }
 
-    const form = await saveFormToDb(result.payload);
-    setMessage("Formulario guardado correctamente.");
-    setMessageType("success");
+    try {
+      const form = await saveForm(result.payload);
+      setMessage("Formulario guardado correctamente en Supabase.");
+      setMessageType("success");
 
-    if (redirectToPreview) {
-      navigate(`/admin/forms/${form.id}/preview`);
-      return;
+      if (redirectToPreview) {
+        navigate(`/admin/forms/${form.id}/preview`);
+        return;
+      }
+
+      navigate(`/admin/forms/${form.id}`);
+    } catch (error) {
+      setMessage(error.message || "No se pudo guardar el formulario.");
+      setMessageType("error");
+    } finally {
+      setSaving(false);
     }
-
-    navigate(`/admin/forms/${form.id}`);
   };
 
   return (
@@ -158,7 +210,12 @@ function NewSurvey() {
       eyebrow="Importador JSON SurveyJS"
       actions={<Link className="button secondary" to="/admin/forms">Volver</Link>}
     >
-      {id && !existingForm ? (
+      {loading ? (
+        <section className="empty-state">
+          <h2>Cargando formulario</h2>
+          <p>Consultando Supabase.</p>
+        </section>
+      ) : id && notFound ? (
         <section className="empty-state">
           <h2>Formulario no encontrado</h2>
           <Link className="button primary" to="/admin/forms">
@@ -168,10 +225,10 @@ function NewSurvey() {
       ) : (
         <div className="editor-grid">
           <section className="form-panel">
-            {responses.length > 0 ? (
+            {responsesCount > 0 ? (
               <div className="warning">
-                Este formulario ya tiene {responses.length} respuesta
-                {responses.length === 1 ? "" : "s"}. Cambiar preguntas puede
+                Este formulario ya tiene {responsesCount} respuesta
+                {responsesCount === 1 ? "" : "s"}. Cambiar preguntas puede
                 dificultar leer respuestas anteriores.
               </div>
             ) : null}
@@ -267,13 +324,28 @@ function NewSurvey() {
               ) : null}
             </div>
             <div className="actions-row">
-              <button className="button secondary" type="button" onClick={() => handleSave(FORM_STATUS.draft)}>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() => handleSave(FORM_STATUS.draft)}
+                disabled={saving}
+              >
                 Guardar borrador
               </button>
-              <button className="button secondary" type="button" onClick={() => handleSave(FORM_STATUS.published)}>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() => handleSave(FORM_STATUS.published)}
+                disabled={saving}
+              >
                 Guardar y publicar
               </button>
-              <button className="button primary" type="button" onClick={() => handleSave(status, true)}>
+              <button
+                className="button primary"
+                type="button"
+                onClick={() => handleSave(status, true)}
+                disabled={saving}
+              >
                 Guardar y previsualizar
               </button>
             </div>

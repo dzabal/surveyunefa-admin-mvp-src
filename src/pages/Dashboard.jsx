@@ -1,18 +1,17 @@
 import { Link } from "react-router-dom";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
 import ConfirmDialog from "../components/ConfirmDialog";
 import FormActions from "../components/FormActions";
 import {
+  FORM_STATUS,
+  STATUS_LABELS,
+  STATUS_OPTIONS,
   deleteForm,
   duplicateForm,
-  exportLocalBackup,
-  FORM_STATUS,
+  exportBackup,
   getForms,
-  getResponses,
-  importLocalBackup,
-  STATUS_OPTIONS,
-  STATUS_LABELS,
+  importBackup,
   updateFormStatus,
 } from "../services/surveyStore";
 
@@ -27,13 +26,32 @@ function downloadFile(filename, content, type) {
 }
 
 function Dashboard() {
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [forms, setForms] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
   const [pendingAction, setPendingAction] = useState(null);
   const backupInputRef = useRef(null);
-  const forms = getForms();
+
+  const loadForms = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      setForms(await getForms());
+    } catch (loadError) {
+      setError(loadError.message || "No se pudieron cargar los formularios.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadForms();
+  }, []);
+
   const visibleForms = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
@@ -48,7 +66,7 @@ function Dashboard() {
 
       return matchesStatus && matchesQuery;
     });
-  }, [forms, query, statusFilter, refreshKey]);
+  }, [forms, query, statusFilter]);
 
   const statusCounts = forms.reduce(
     (counts, form) => ({
@@ -58,22 +76,26 @@ function Dashboard() {
     {},
   );
 
-  const refresh = () => setRefreshKey((current) => current + 1);
-
-  const changeStatus = (form, status) => {
-    const nextForm = updateFormStatus(form.id, status);
-    if (nextForm) {
+  const changeStatus = async (form, status) => {
+    try {
+      const nextForm = await updateFormStatus(form.id, status);
       setNotice(`"${nextForm.title}" ahora esta ${STATUS_LABELS[nextForm.status].toLowerCase()}.`);
-      refresh();
+      await loadForms();
+    } catch (statusError) {
+      setError(statusError.message || "No se pudo cambiar el estado.");
     }
   };
 
-  const cloneForm = (form) => {
-    const duplicated = duplicateForm(form.id);
+  const cloneForm = async (form) => {
+    try {
+      const duplicated = await duplicateForm(form.id);
 
-    if (duplicated) {
-      setNotice(`Se creo una copia en borrador: "${duplicated.title}".`);
-      refresh();
+      if (duplicated) {
+        setNotice(`Se creo una copia en borrador: "${duplicated.title}".`);
+        await loadForms();
+      }
+    } catch (cloneError) {
+      setError(cloneError.message || "No se pudo duplicar el formulario.");
     }
   };
 
@@ -93,30 +115,34 @@ function Dashboard() {
       type: "delete",
       form,
       title: "Eliminar formulario",
-      message: `"${form.title}" y sus respuestas locales se eliminaran definitivamente. Esta accion no se puede deshacer.`,
+      message: `"${form.title}" y sus respuestas se eliminaran definitivamente en Supabase. Esta accion no se puede deshacer.`,
       confirmLabel: "Eliminar",
       danger: true,
     });
   };
 
-  const confirmPendingAction = () => {
+  const confirmPendingAction = async () => {
     if (!pendingAction) {
       return;
     }
 
     const { type, form } = pendingAction;
+    setPendingAction(null);
 
     if (type === "archive") {
-      changeStatus(form, FORM_STATUS.archived);
+      await changeStatus(form, FORM_STATUS.archived);
+      return;
     }
 
     if (type === "delete") {
-      deleteForm(form.id);
-      setNotice(`Formulario "${form.title}" eliminado.`);
-      refresh();
+      try {
+        await deleteForm(form.id);
+        setNotice(`Formulario "${form.title}" eliminado.`);
+        await loadForms();
+      } catch (deleteError) {
+        setError(deleteError.message || "No se pudo eliminar el formulario.");
+      }
     }
-
-    setPendingAction(null);
   };
 
   const copyPublicLink = async (form) => {
@@ -130,19 +156,23 @@ function Dashboard() {
     }
   };
 
-  const exportBackup = () => {
-    const backup = exportLocalBackup();
-    const date = new Date().toISOString().slice(0, 10);
+  const exportCurrentBackup = async () => {
+    try {
+      const backup = await exportBackup();
+      const date = new Date().toISOString().slice(0, 10);
 
-    downloadFile(
-      `surveyunefa-respaldo-${date}.json`,
-      JSON.stringify(backup, null, 2),
-      "application/json",
-    );
-    setNotice("Respaldo local exportado.");
+      downloadFile(
+        `surveyunefa-respaldo-${date}.json`,
+        JSON.stringify(backup, null, 2),
+        "application/json",
+      );
+      setNotice("Respaldo exportado desde Supabase.");
+    } catch (exportError) {
+      setError(exportError.message || "No se pudo exportar el respaldo.");
+    }
   };
 
-  const importBackup = async (event) => {
+  const requestImportBackup = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
 
@@ -155,7 +185,7 @@ function Dashboard() {
       file,
       title: "Importar respaldo",
       message:
-        "Este respaldo reemplazara los formularios y respuestas locales actuales.",
+        "Este respaldo reemplazara los formularios y respuestas actuales en Supabase.",
       confirmLabel: "Importar",
       danger: true,
     });
@@ -164,13 +194,13 @@ function Dashboard() {
   const confirmImportBackup = async (file) => {
     try {
       const content = await file.text();
-      const result = importLocalBackup(JSON.parse(content));
+      const result = await importBackup(JSON.parse(content));
       setNotice(
         `Respaldo importado: ${result.forms} formulario${result.forms === 1 ? "" : "s"} y ${result.responses} respuesta${result.responses === 1 ? "" : "s"}.`,
       );
-      refresh();
-    } catch (error) {
-      setNotice(error.message || "No se pudo importar el respaldo.");
+      await loadForms();
+    } catch (importError) {
+      setError(importError.message || "No se pudo importar el respaldo.");
     } finally {
       setPendingAction(null);
     }
@@ -188,10 +218,10 @@ function Dashboard() {
   return (
     <AdminLayout
       title="Formularios"
-      eyebrow={`${forms.length} formulario${forms.length === 1 ? "" : "s"}`}
+      eyebrow={loading ? "Cargando formularios" : `${forms.length} formulario${forms.length === 1 ? "" : "s"}`}
       actions={
         <div className="actions-row">
-          <button className="button secondary" type="button" onClick={exportBackup}>
+          <button className="button secondary" type="button" onClick={exportCurrentBackup}>
             Exportar respaldo
           </button>
           <button
@@ -206,7 +236,7 @@ function Dashboard() {
             className="sr-only"
             type="file"
             accept="application/json"
-            onChange={importBackup}
+            onChange={requestImportBackup}
           />
           <Link className="button primary" to="/admin/forms/new">
             Nuevo formulario
@@ -214,7 +244,15 @@ function Dashboard() {
         </div>
       }
     >
-      {forms.length > 0 ? (
+      {error ? <p className="form-message error">{error}</p> : null}
+      {notice ? <p className="form-message success">{notice}</p> : null}
+
+      {loading ? (
+        <section className="empty-state">
+          <h2>Cargando formularios</h2>
+          <p>Consultando Supabase.</p>
+        </section>
+      ) : forms.length > 0 ? (
         <section className="toolbar-panel">
           <div className="filter-grid">
             <label>
@@ -247,28 +285,26 @@ function Dashboard() {
             <span>Borradores: {statusCounts.draft || 0}</span>
             <span>Archivados: {statusCounts.archived || 0}</span>
           </div>
-
-          {notice ? <p className="form-message success">{notice}</p> : null}
         </section>
       ) : null}
 
-      {forms.length === 0 ? (
+      {!loading && forms.length === 0 ? (
         <section className="empty-state">
           <h2>No hay formularios todavia</h2>
           <p>
             Importa el JSON generado por SurveyJS Creator Online para comenzar a
-            administrarlo localmente.
+            administrarlo en Supabase.
           </p>
           <Link className="button primary" to="/admin/forms/new">
             Importar JSON
           </Link>
         </section>
-      ) : visibleForms.length === 0 ? (
+      ) : !loading && visibleForms.length === 0 ? (
         <section className="empty-state">
           <h2>No encontramos formularios con esos filtros</h2>
           <p>Ajusta la busqueda o cambia el estado seleccionado.</p>
         </section>
-      ) : (
+      ) : !loading ? (
         <section className="table-panel">
           <table>
             <thead>
@@ -282,47 +318,43 @@ function Dashboard() {
             </thead>
 
             <tbody>
-              {visibleForms.map((form) => {
-                const responses = getResponses(form.id);
-
-                return (
-                  <tr key={form.id}>
-                    <td>
-                      <strong>{form.title}</strong>
-                      <span className="muted">/f/{form.slug}</span>
-                      {form.description ? (
-                        <span className="table-description">{form.description}</span>
-                      ) : null}
-                    </td>
-                    <td>
-                      <span className={`status ${form.status}`}>
-                        {STATUS_LABELS[form.status]}
-                      </span>
-                    </td>
-                    <td>{responses.length}</td>
-                    <td>{new Date(form.updatedAt).toLocaleString()}</td>
-                    <td>
-                      <FormActions
-                        form={form}
-                        onArchive={requestArchive}
-                        onCopyLink={copyPublicLink}
-                        onDelete={requestDelete}
-                        onDuplicate={cloneForm}
-                        onPublish={(targetForm) =>
-                          changeStatus(targetForm, FORM_STATUS.published)
-                        }
-                        onUnpublish={(targetForm) =>
-                          changeStatus(targetForm, FORM_STATUS.draft)
-                        }
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
+              {visibleForms.map((form) => (
+                <tr key={form.id}>
+                  <td>
+                    <strong>{form.title}</strong>
+                    <span className="muted">/f/{form.slug}</span>
+                    {form.description ? (
+                      <span className="table-description">{form.description}</span>
+                    ) : null}
+                  </td>
+                  <td>
+                    <span className={`status ${form.status}`}>
+                      {STATUS_LABELS[form.status]}
+                    </span>
+                  </td>
+                  <td>{form.responseCount || 0}</td>
+                  <td>{new Date(form.updatedAt).toLocaleString()}</td>
+                  <td>
+                    <FormActions
+                      form={form}
+                      onArchive={requestArchive}
+                      onCopyLink={copyPublicLink}
+                      onDelete={requestDelete}
+                      onDuplicate={cloneForm}
+                      onPublish={(targetForm) =>
+                        changeStatus(targetForm, FORM_STATUS.published)
+                      }
+                      onUnpublish={(targetForm) =>
+                        changeStatus(targetForm, FORM_STATUS.draft)
+                      }
+                    />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </section>
-      )}
+      ) : null}
 
       <ConfirmDialog
         open={Boolean(pendingAction)}

@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
 import ConfirmDialog from "../components/ConfirmDialog";
 import {
@@ -63,11 +63,32 @@ function buildColumns(form, responses) {
 
 function Results() {
   const { id } = useParams();
+  const [form, setForm] = useState(null);
+  const [responses, setResponses] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
-  const form = getFormById(id);
-  const responses = form ? getResponses(form.id) : [];
+  const [error, setError] = useState("");
+
+  const loadResults = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const loadedForm = await getFormById(id);
+      setForm(loadedForm);
+      setResponses(loadedForm ? await getResponses(loadedForm.id) : []);
+    } catch (loadError) {
+      setError(loadError.message || "No se pudieron cargar las respuestas.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadResults();
+  }, [id]);
+
   const columns = form ? buildColumns(form, responses) : [];
   const filteredResponses = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -85,7 +106,7 @@ function Results() {
         .toLowerCase()
         .includes(normalizedQuery),
     );
-  }, [query, responses, refreshKey]);
+  }, [query, responses]);
   const latestResponse = responses[0];
 
   const exportJson = () => {
@@ -122,7 +143,7 @@ function Results() {
       type: "single",
       responseId,
       title: "Eliminar respuesta",
-      message: "Esta respuesta local se eliminara definitivamente.",
+      message: "Esta respuesta se eliminara definitivamente en Supabase.",
       confirmLabel: "Eliminar",
     });
   };
@@ -131,29 +152,46 @@ function Results() {
     setPendingAction({
       type: "all",
       title: "Borrar respuestas",
-      message: `Se eliminaran las ${responses.length} respuestas locales de "${form.title}". Esta accion no se puede deshacer.`,
+      message: `Se eliminaran las ${responses.length} respuestas de "${form.title}". Esta accion no se puede deshacer.`,
       confirmLabel: "Borrar respuestas",
     });
   };
 
-  const confirmPendingAction = () => {
-    if (pendingAction?.type === "single") {
-      deleteResponse(pendingAction.responseId);
-    }
+  const confirmPendingAction = async () => {
+    try {
+      if (pendingAction?.type === "single") {
+        await deleteResponse(pendingAction.responseId);
+      }
 
-    if (pendingAction?.type === "all") {
-      deleteResponsesByForm(form.id);
-    }
+      if (pendingAction?.type === "all") {
+        await deleteResponsesByForm(form.id);
+      }
 
-    setPendingAction(null);
-    setRefreshKey((current) => current + 1);
+      setPendingAction(null);
+      await loadResults();
+    } catch (deleteError) {
+      setError(deleteError.message || "No se pudo eliminar la respuesta.");
+      setPendingAction(null);
+    }
   };
+
+  if (loading) {
+    return (
+      <AdminLayout title="Respuestas" eyebrow="Cargando datos">
+        <section className="empty-state">
+          <h2>Cargando respuestas</h2>
+          <p>Consultando Supabase.</p>
+        </section>
+      </AdminLayout>
+    );
+  }
 
   if (!form) {
     return (
       <AdminLayout title="Respuestas" eyebrow="Formulario no encontrado">
         <section className="empty-state">
           <h2>No encontramos ese formulario</h2>
+          {error ? <p className="form-message error">{error}</p> : null}
           <Link className="button primary" to="/admin/forms">
             Volver al dashboard
           </Link>
@@ -201,6 +239,8 @@ function Results() {
         </div>
       }
     >
+      {error ? <p className="form-message error">{error}</p> : null}
+
       {responses.length === 0 ? (
         <section className="empty-state">
           <h2>Sin respuestas todavia</h2>
