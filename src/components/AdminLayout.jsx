@@ -1,6 +1,10 @@
 import { Link, NavLink } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
+import { canManageUsers, ROLE_LABELS } from "../auth/roles";
 
 function AdminLayout({ title, eyebrow, actions, children }) {
+  const { profile, signOut, user } = useAuth();
+
   return (
     <div className="admin-shell">
       <aside className="sidebar">
@@ -8,13 +12,22 @@ function AdminLayout({ title, eyebrow, actions, children }) {
           <span className="brand-mark">S</span>
           <span>
             <strong>SurveyUNEFA</strong>
-            <small>Admin local</small>
+            <small>Admin seguro</small>
           </span>
         </Link>
 
         <nav className="sidebar-nav" aria-label="Navegacion administrativa">
           <NavLink to="/admin/forms">Formularios</NavLink>
+          {canManageUsers(profile) ? <NavLink to="/admin/users">Usuarios</NavLink> : null}
         </nav>
+
+        <div className="sidebar-account">
+          <strong>{user?.email}</strong>
+          <span>{ROLE_LABELS[profile?.role] || "Sin rol"}</span>
+          <button className="link-button" type="button" onClick={signOut}>
+            Cerrar sesion
+          </button>
+        </div>
       </aside>
 
       <main className="admin-main">

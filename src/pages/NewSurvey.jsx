@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import AdminLayout from "../components/AdminLayout";
+import { useAuth } from "../auth/AuthProvider";
+import { canPublishForms } from "../auth/roles";
 import {
   FORM_STATUS,
   countSurveyQuestions,
@@ -17,6 +19,7 @@ import {
 function NewSurvey() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [existingForm, setExistingForm] = useState(null);
   const [responsesCount, setResponsesCount] = useState(0);
   const [loading, setLoading] = useState(Boolean(id));
@@ -33,6 +36,7 @@ function NewSurvey() {
   const [jsonInfo, setJsonInfo] = useState(null);
 
   const isEditing = Boolean(existingForm);
+  const canPublish = canPublishForms(profile);
 
   useEffect(() => {
     async function loadExistingForm() {
@@ -119,6 +123,13 @@ function NewSurvey() {
 
     if (!validation.ok) {
       return validation;
+    }
+
+    if (nextStatus === FORM_STATUS.published && !canPublish) {
+      return {
+        ok: false,
+        message: "Tu rol permite editar borradores, pero no publicar formularios.",
+      };
     }
 
     const normalizedSlug = slugify(slug || title);
@@ -268,7 +279,9 @@ function NewSurvey() {
                 onChange={(event) => setStatus(event.target.value)}
               >
                 <option value="draft">Borrador</option>
-                <option value="published">Publicado</option>
+                <option value="published" disabled={!canPublish}>
+                  Publicado
+                </option>
                 <option value="archived">Archivado</option>
               </select>
             </label>
@@ -332,14 +345,16 @@ function NewSurvey() {
               >
                 Guardar borrador
               </button>
-              <button
-                className="button secondary"
-                type="button"
-                onClick={() => handleSave(FORM_STATUS.published)}
-                disabled={saving}
-              >
-                Guardar y publicar
-              </button>
+              {canPublish ? (
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => handleSave(FORM_STATUS.published)}
+                  disabled={saving}
+                >
+                  Guardar y publicar
+                </button>
+              ) : null}
               <button
                 className="button primary"
                 type="button"

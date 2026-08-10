@@ -9,18 +9,24 @@ function FormActions({
   onDuplicate,
   onPublish,
   onUnpublish,
+  permissions,
 }) {
   const isPublished = form.status === FORM_STATUS.published;
   const isArchived = form.status === FORM_STATUS.archived;
+  const canEdit = permissions?.canManageForms;
+  const canPublish = permissions?.canPublishForms;
+  const canDelete = permissions?.canDeleteData;
 
   return (
     <div className="action-cluster" aria-label={`Acciones para ${form.title}`}>
       <Link className="button secondary compact" to={`/admin/forms/${form.id}/overview`}>
         Resumen
       </Link>
-      <Link className="button secondary compact" to={`/admin/forms/${form.id}`}>
-        Editar
-      </Link>
+      {canEdit ? (
+        <Link className="button secondary compact" to={`/admin/forms/${form.id}`}>
+          Editar
+        </Link>
+      ) : null}
       <Link className="button secondary compact" to={`/admin/forms/${form.id}/preview`}>
         Preview
       </Link>
@@ -34,26 +40,26 @@ function FormActions({
         </button>
         <div className="more-actions-menu">
           {isPublished ? (
-            <button type="button" onClick={() => onUnpublish(form)}>
+            <button type="button" onClick={() => onUnpublish(form)} disabled={!canPublish}>
               Despublicar
             </button>
           ) : (
-            <button type="button" onClick={() => onPublish(form)} disabled={isArchived}>
+            <button type="button" onClick={() => onPublish(form)} disabled={isArchived || !canPublish}>
               Publicar
             </button>
           )}
           <button type="button" onClick={() => onCopyLink(form)} disabled={!isPublished}>
             Copiar link publico
           </button>
-          <button type="button" onClick={() => onDuplicate(form)}>
+          <button type="button" onClick={() => onDuplicate(form)} disabled={!canEdit}>
             Duplicar
           </button>
           {isArchived ? (
-            <button className="danger" type="button" onClick={() => onDelete(form)}>
+            <button className="danger" type="button" onClick={() => onDelete(form)} disabled={!canDelete}>
               Eliminar definitivo
             </button>
           ) : (
-            <button className="danger" type="button" onClick={() => onArchive(form)}>
+            <button className="danger" type="button" onClick={() => onArchive(form)} disabled={!canDelete}>
               Archivar
             </button>
           )}

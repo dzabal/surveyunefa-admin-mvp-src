@@ -2,6 +2,8 @@ import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
 import ConfirmDialog from "../components/ConfirmDialog";
+import { useAuth } from "../auth/AuthProvider";
+import { canDeleteData } from "../auth/roles";
 import {
   deleteResponse,
   deleteResponsesByForm,
@@ -63,6 +65,7 @@ function buildColumns(form, responses) {
 
 function Results() {
   const { id } = useParams();
+  const { profile } = useAuth();
   const [form, setForm] = useState(null);
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -108,6 +111,7 @@ function Results() {
     );
   }, [query, responses]);
   const latestResponse = responses[0];
+  const canDeleteResponses = canDeleteData(profile);
 
   const exportJson = () => {
     downloadFile(
@@ -232,7 +236,7 @@ function Results() {
             className="button danger"
             type="button"
             onClick={removeAllResponses}
-            disabled={responses.length === 0}
+            disabled={responses.length === 0 || !canDeleteResponses}
           >
             Borrar respuestas
           </button>
@@ -316,13 +320,15 @@ function Results() {
                               {JSON.stringify(response.data, null, 2)}
                             </pre>
                           </details>
-                          <button
-                            className="link-button danger"
-                            type="button"
-                            onClick={() => removeResponse(response.id)}
-                          >
-                            Eliminar
-                          </button>
+                          {canDeleteResponses ? (
+                            <button
+                              className="link-button danger"
+                              type="button"
+                              onClick={() => removeResponse(response.id)}
+                            >
+                              Eliminar
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

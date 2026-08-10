@@ -91,17 +91,20 @@ h2 {
 }
 
 .home-screen,
-.public-page {
+.public-page,
+.auth-screen {
   min-height: 100vh;
   padding: 32px;
 }
 
-.home-screen {
+.home-screen,
+.auth-screen {
   display: grid;
   place-items: center;
 }
 
-.home-panel {
+.home-panel,
+.auth-panel {
   width: min(680px, 100%);
   padding: 40px;
   border: 1px solid var(--border);
@@ -110,9 +113,32 @@ h2 {
   box-shadow: var(--shadow);
 }
 
-.home-panel p {
+.home-panel p,
+.auth-panel p {
   margin-top: 12px;
   color: var(--muted);
+}
+
+.auth-panel {
+  width: min(480px, 100%);
+}
+
+.auth-form,
+.stacked-form {
+  display: grid;
+  gap: 16px;
+}
+
+.auth-form {
+  margin: 24px 0 18px;
+}
+
+.auth-form label,
+.stacked-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 800;
 }
 
 .admin-shell {
@@ -180,6 +206,24 @@ h2 {
 .sidebar-nav a:hover {
   color: var(--primary-strong);
   background: var(--surface-muted);
+}
+
+.sidebar-account {
+  display: grid;
+  gap: 6px;
+  margin-top: 28px;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+  font-size: 13px;
+}
+
+.sidebar-account strong,
+.sidebar-account span {
+  overflow-wrap: anywhere;
+}
+
+.sidebar-account span {
+  color: var(--muted);
 }
 
 .admin-main {
@@ -595,6 +639,7 @@ textarea {
 }
 
 .form-message {
+  margin-bottom: 12px;
   color: var(--muted);
   font-weight: 700;
 }

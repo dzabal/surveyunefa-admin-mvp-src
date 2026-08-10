@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
 import ConfirmDialog from "../components/ConfirmDialog";
 import FormActions from "../components/FormActions";
+import { useAuth } from "../auth/AuthProvider";
+import { canDeleteData, canManageForms, canPublishForms } from "../auth/roles";
 import {
   FORM_STATUS,
   STATUS_LABELS,
@@ -26,6 +28,7 @@ function downloadFile(filename, content, type) {
 }
 
 function Dashboard() {
+  const { profile } = useAuth();
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -34,6 +37,11 @@ function Dashboard() {
   const [error, setError] = useState("");
   const [pendingAction, setPendingAction] = useState(null);
   const backupInputRef = useRef(null);
+  const permissions = {
+    canDeleteData: canDeleteData(profile),
+    canManageForms: canManageForms(profile),
+    canPublishForms: canPublishForms(profile),
+  };
 
   const loadForms = async () => {
     setLoading(true);
@@ -224,13 +232,15 @@ function Dashboard() {
           <button className="button secondary" type="button" onClick={exportCurrentBackup}>
             Exportar respaldo
           </button>
-          <button
-            className="button secondary"
-            type="button"
-            onClick={() => backupInputRef.current?.click()}
-          >
-            Importar respaldo
-          </button>
+          {permissions.canDeleteData ? (
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => backupInputRef.current?.click()}
+            >
+              Importar respaldo
+            </button>
+          ) : null}
           <input
             ref={backupInputRef}
             className="sr-only"
@@ -238,9 +248,11 @@ function Dashboard() {
             accept="application/json"
             onChange={requestImportBackup}
           />
-          <Link className="button primary" to="/admin/forms/new">
-            Nuevo formulario
-          </Link>
+          {permissions.canManageForms ? (
+            <Link className="button primary" to="/admin/forms/new">
+              Nuevo formulario
+            </Link>
+          ) : null}
         </div>
       }
     >
@@ -347,6 +359,7 @@ function Dashboard() {
                       onUnpublish={(targetForm) =>
                         changeStatus(targetForm, FORM_STATUS.draft)
                       }
+                      permissions={permissions}
                     />
                   </td>
                 </tr>

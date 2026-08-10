@@ -8,15 +8,15 @@ function Home() {
         <h1>SurveyUNEFA</h1>
         <p>
           Administra formularios JSON de SurveyJS, publica enlaces y revisa
-          respuestas desde una base local del navegador.
+          respuestas desde Supabase con acceso protegido por roles.
         </p>
 
         <div className="actions-row">
           <Link className="button primary" to="/admin/forms">
             Abrir administrador
           </Link>
-          <Link className="button secondary" to="/admin/forms/new">
-            Nuevo formulario
+          <Link className="button secondary" to="/login">
+            Iniciar sesion
           </Link>
         </div>
       </section>
