@@ -1,0 +1,21 @@
+{
+    "title": "Encuesta de Prueba",
+    "elements": [
+      {
+        "type": "text",
+        "name": "nombre",
+        "title": "¿Cuál es su nombre?"
+      },
+      {
+        "type": "radiogroup",
+        "name": "satisfaccion",
+        "title": "Nivel de satisfacción",
+        "choices": [
+          "Excelente",
+          "Bueno",
+          "Regular",
+          "Malo"
+        ]
+      }
+    ]
+  }
